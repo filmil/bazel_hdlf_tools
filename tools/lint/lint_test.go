@@ -38,6 +38,7 @@ func rulesAndLines(fs []Finding) []at {
 var badCases = map[string][]at{
 	"testdata/bad/actions_run.bzl":            {{"action-outside-run-tool", 2}, {"action-outside-run-tool", 7}},
 	"testdata/bad/private_tool_attr.bzl":      {{"private-tool-attr", 5}, {"private-tool-attr", 10}},
+	"testdata/bad/private_tool_attr_late.bzl": {{"private-tool-attr", 4}, {"private-tool-attr", 9}},
 	"testdata/bad/private_tool_attr_more.bzl": {{"private-tool-attr", 6}, {"private-tool-attr", 7}, {"private-tool-attr", 7}, {"private-tool-attr", 8}},
 	"testdata/bad/shell_env.bzl":              {{"action-outside-run-tool", 2}, {"shell-env", 5}},
 	"testdata/bad/local_tag.BUILD":            {{"forbidden-tag", 7}},

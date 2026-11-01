@@ -462,7 +462,9 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 			continue
 		}
 		args := from + call[1] // just inside the call's "("
-		for _, v := range defaultValues(masked, d, strs, consts, args, exprEnd(masked, d, args)) {
+		// to is past the call's ")", so every argument is searched, not
+		// only the first: default may come after doc or executable.
+		for _, v := range defaultValues(masked, d, strs, consts, args, to) {
 			if external(v) {
 				out = append(out, Finding{path, lineAt(t.start), "private-tool-attr",
 					fmt.Sprintf("private attribute %q names %q; get tools from ctx.toolchains", t.val, v)})
