@@ -55,13 +55,16 @@ var badCases = map[string][]at{
 	"testdata/bad/module/MODULE.bazel":     {{"host-env", 4}},
 }
 
+// fixtureRunTool is the run_tool.bzl of the fixtures.
+const fixtureRunTool = "testdata/good/private/run_tool.bzl"
+
 func scanFile(t *testing.T, path, pkg string, allow Allowlist) []Finding {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Scan(path, pkg, data, allow)
+	return Scan(path, pkg, data, Config{Allow: allow, RunTool: fixtureRunTool})
 }
 
 func TestBadFixturesFail(t *testing.T) {
@@ -191,7 +194,7 @@ func TestWalk(t *testing.T) {
 	write(".bazelrc", "build --action_env=HOME\n")
 	write("notes.txt", "use_default_shell_env = True\n")
 
-	got, err := Walk(root, Allowlist{})
+	got, err := Walk(root, Config{RunTool: "m/private/run_tool.bzl"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,11 +217,37 @@ func TestWalk(t *testing.T) {
 		t.Errorf("want 4 findings, got:\n%s", all)
 	}
 
-	got, err = Walk(root, Allowlist{"integration:t": "approved"})
+	got, err = Walk(root, Config{Allow: Allowlist{"integration:t": "approved"}, RunTool: "m/private/run_tool.bzl"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Errorf("with the integration test allowlisted: want 3 findings, got %v", got)
+	}
+}
+
+// Only the module's own run_tool.bzl may start actions: another file with
+// the same name, in another package, may not.
+func TestRunToolIsOneFile(t *testing.T) {
+	src := []byte("def f(ctx):\n    ctx.actions.run(executable = ctx.executable.x)\n")
+	cfg := Config{RunTool: "m/private/run_tool.bzl"}
+	if got := Scan("m/private/run_tool.bzl", "m/private", src, cfg); len(got) != 0 {
+		t.Errorf("the module's run_tool.bzl: want no findings, got %v", got)
+	}
+	for _, other := range []string{"integration/private/run_tool.bzl", "x_private/run_tool.bzl", "n/m/private/run_tool.bzl"} {
+		got := Scan(other, filepath.Dir(other), src, cfg)
+		if !reflect.DeepEqual(rulesAndLines(got), []at{{"action-outside-run-tool", 2}}) {
+			t.Errorf("%s: want one action-outside-run-tool finding, got %v", other, got)
+		}
+	}
+}
+
+// A relative --allowlist is under the root; an absolute one is used as is.
+func TestUnder(t *testing.T) {
+	if got := Under("/repo", "tools/lint/x.txt"); got != "/repo/tools/lint/x.txt" {
+		t.Errorf("relative: got %q", got)
+	}
+	if got := Under("/repo", "/abs/x.txt"); got != "/abs/x.txt" {
+		t.Errorf("absolute: got %q", got)
 	}
 }

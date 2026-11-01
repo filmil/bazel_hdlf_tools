@@ -113,14 +113,34 @@ func ParseAllowlist(data []byte) (Allowlist, error) {
 	return a, s.Err()
 }
 
-// Scan returns the findings for one file. pkg is the file's Bazel package
-// ("" for the root, "integration/foo" inside the integration module), used
-// to look targets up in the allowlist.
-func Scan(path, pkg string, data []byte, allow Allowlist) []Finding {
+// Config is what a module tells the lint about itself.
+type Config struct {
+	// Allow lists the targets allowed to carry an exception tag.
+	Allow Allowlist
+	// RunTool is the module's run_tool.bzl, relative to the root (for
+	// example "em/private/run_tool.bzl"): the only file allowed to start
+	// actions that run a tool.
+	RunTool string
+}
+
+// Under returns p, a path given on the command line, as a path to open: p
+// itself if it is absolute, else p under root.
+func Under(root, p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(root, p)
+}
+
+// Scan returns the findings for one file. path is relative to the root, as
+// RunTool is. pkg is the file's Bazel package ("" for the root,
+// "integration/foo" inside the integration module), used to look targets up
+// in the allowlist.
+func Scan(path, pkg string, data []byte, cfg Config) []Finding {
 	var out []Finding
 	switch KindOf(path) {
 	case KindStarlark:
-		out = scanStarlark(path, pkg, string(data), allow)
+		out = scanStarlark(path, pkg, string(data), cfg)
 	case KindRC, KindWorkflow:
 		out = scanFlags(path, string(data))
 	}
@@ -289,7 +309,7 @@ func topCalls(masked string, d []int, strs []str) []span {
 	return out
 }
 
-func scanStarlark(path, pkg, src string, allow Allowlist) []Finding {
+func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 	masked, strs := tokenize(src)
 	d := depths(masked)
 	lineAt := lineIndex(src)
@@ -310,11 +330,11 @@ func scanStarlark(path, pkg, src string, allow Allowlist) []Finding {
 	}
 
 	// Every action runs its tool through run_tool (spec "Toolchains",
-	// requirement 3), which lives in a file named private/run_tool.bzl.
-	if !strings.HasSuffix(filepath.ToSlash(path), RunToolFile) {
+	// requirement 3), which lives in the one file cfg.RunTool names.
+	if filepath.ToSlash(path) != cfg.RunTool {
 		for _, loc := range reActions.FindAllStringIndex(masked, -1) {
 			out = append(out, Finding{path, lineAt(loc[0]), "action-outside-run-tool",
-				"start actions that run a tool through run_tool, in " + RunToolFile})
+				"start actions that run a tool through run_tool, in " + cfg.RunTool})
 		}
 	}
 
@@ -384,7 +404,7 @@ func scanStarlark(path, pkg, src string, allow Allowlist) []Finding {
 				continue
 			}
 			l := label(u.start)
-			if _, ok := allow[l]; !ok {
+			if _, ok := cfg.Allow[l]; !ok {
 				out = append(out, Finding{path, lineAt(u.start), "exception-tag",
 					fmt.Sprintf("%q on //%s needs a line in tools/lint/hermetic_exceptions.txt, approved by a person", ex, l)})
 			}
@@ -392,9 +412,6 @@ func scanStarlark(path, pkg, src string, allow Allowlist) []Finding {
 	}
 	return out
 }
-
-// RunToolFile is the only file allowed to start actions that run tools.
-const RunToolFile = "private/run_tool.bzl"
 
 // external reports whether a label names another repository. Bazel's own
 // repositories are fine.
@@ -430,7 +447,7 @@ const FixtureDir = "tools/lint/testdata"
 // findings with paths relative to root. It skips .git, Bazel's output
 // symlinks and FixtureDir. Packages inside the integration module are
 // looked up in the allowlist as "integration/...".
-func Walk(root string, allow Allowlist) ([]Finding, error) {
+func Walk(root string, cfg Config) ([]Finding, error) {
 	var out []Finding
 	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -459,7 +476,7 @@ func Walk(root string, allow Allowlist) ([]Finding, error) {
 		if pkg == "." {
 			pkg = ""
 		}
-		out = append(out, Scan(rel, pkg, data, allow)...)
+		out = append(out, Scan(rel, pkg, data, cfg)...)
 		return nil
 	})
 	return out, err
