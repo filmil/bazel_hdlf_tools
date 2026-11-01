@@ -46,6 +46,8 @@ var badCases = map[string][]at{
 	"testdata/bad/network_tag.BUILD":       {{"exception-tag", 4}},
 	"testdata/bad/requires_root.BUILD":     {{"exception-tag", 1}},
 	"testdata/bad/macro_network.bzl":       {{"exception-tag", 4}},
+	"testdata/bad/macro_computed_name.bzl": {{"exception-tag", 4}},
+	"testdata/bad/computed_name.BUILD":     {{"exception-tag", 3}},
 	"testdata/bad/exec_req.bzl":            {{"action-outside-run-tool", 2}, {"forbidden-tag", 6}},
 	"testdata/bad/exec_req_dict.bzl":       {{"exception-tag", 1}, {"forbidden-tag", 1}, {"action-outside-run-tool", 4}},
 	"testdata/bad/action_env.bazelrc":      {{"host-env", 1}},
@@ -122,6 +124,10 @@ func TestAllowlistLabels(t *testing.T) {
 		{"testdata/bad/network_tag.BUILD", "x:fetches_things"},
 		{"testdata/bad/requires_root.BUILD", "x:as_root"},
 		{"testdata/bad/macro_network.bzl", "x:macro_network.bzl"},
+		// A computed name is not guessed: a macro is listed by its file,
+		// and a BUILD target with a computed name by its BUILD file.
+		{"testdata/bad/macro_computed_name.bzl", "x:macro_computed_name.bzl"},
+		{"testdata/bad/computed_name.BUILD", "x:computed_name.BUILD"},
 		{"testdata/bad/concat_tags.BUILD", ""},
 	}
 	for _, c := range cases {

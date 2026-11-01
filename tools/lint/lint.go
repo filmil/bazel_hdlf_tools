@@ -272,8 +272,23 @@ type span struct {
 	name       string
 }
 
+// literal returns the value of the expression masked[from:to] if it is one
+// string literal and nothing else, and "" otherwise: `name + "_test"` has no
+// name the lint can know.
+func literal(masked string, strs []str, from, to int) string {
+	for _, t := range strs {
+		if t.start >= from && t.end <= to {
+			if strings.TrimSpace(masked[from:t.start]) == "" && strings.TrimSpace(masked[t.end:to]) == "" {
+				return t.val
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
 // topCalls returns each top-level call (a rule or macro use) with its name
-// attribute. A def signature is not a call.
+// attribute, if that is a string literal. A def signature is not a call.
 func topCalls(masked string, d []int, strs []str) []span {
 	var out []span
 	for i := 0; i < len(masked); i++ {
@@ -295,12 +310,7 @@ func topCalls(masked string, d []int, strs []str) []span {
 			}
 			from := i + loc[1] - 1
 			to := exprEnd(masked, d, from)
-			for _, t := range strs {
-				if t.start >= from && t.start < to {
-					s.name = t.val
-					break
-				}
-			}
+			s.name = literal(masked, strs, from, to)
 			break
 		}
 		out = append(out, s)
@@ -383,7 +393,12 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 		}
 	}
 
-	calls := topCalls(masked, d, strs)
+	// A target in a BUILD file is listed by its name. In a .bzl file the
+	// name is a macro's parameter, so the file is listed instead.
+	var calls []span
+	if !strings.HasSuffix(path, ".bzl") {
+		calls = topCalls(masked, d, strs)
+	}
 	label := func(pos int) string {
 		for _, c := range calls {
 			if pos > c.start && pos < c.end && c.name != "" {
