@@ -1,0 +1,196 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Every build and test runs in a plain Debian 11 container: the oldest glibc
+# in the registry presubmit matrix, and no Python and no C compiler. A tool
+# that reaches for a host program fails here. .bazelrc keeps
+# --incompatible_strict_action_env and --sandbox_default_allow_network=false
+# on for every build, so CI and local builds run the same way.
+#
+# The image is buildpack-deps:bullseye-curl, pinned by digest: Debian 11
+# with curl and CA certificates and nothing else (no compiler, no git, no
+# Python). The only thing added is a pinned, checksummed bazelisk. Without
+# git, actions/checkout fetches the sources through the GitHub API.
+name: Test
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Once a week, so a break caused by a moving dependency is noticed even
+    # when nothing lands.
+    - cron: "43 7 * * 0"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Steps in a container run under `sh` unless told otherwise, and Debian's
+# `sh` has no `pipefail`.
+defaults:
+  run:
+    shell: bash
+
+env:
+  BAZELISK_VERSION: v1.29.0
+  BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: buildpack-deps:bullseye-curl@sha256:7c8d79c31eb106cca055357456a2fa89b10fa20f254da6fe3eca937439696c62
+    steps:
+      - name: Install bazelisk
+        run: |
+          set -o errexit -o nounset -o pipefail
+          curl -fsSL -o /usr/local/bin/bazel \
+            "https://github.com/bazelbuild/bazelisk/releases/download/${BAZELISK_VERSION}/bazelisk-linux-amd64"
+          echo "${BAZELISK_SHA256}  /usr/local/bin/bazel" | sha256sum -c -
+          chmod +x /usr/local/bin/bazel
+
+      # The point of the container: none of these may be present, so a
+      # rule that works here does not depend on them.
+      - name: No Python or C compiler on the host
+        run: |
+          for t in python3 python gcc cc; do
+            if command -v "$t" >/dev/null 2>&1; then
+              echo "unexpected host tool: $t"; exit 1
+            fi
+          done
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Bazel keeps its disk cache and repository cache in two fixed
+      # directories, so the cache below holds only those, not an output
+      # base.
+      - name: Point Bazel at the cached directories
+        run: |
+          printf 'common --repository_cache=%s\nbuild --disk_cache=%s\n' \
+            "${HOME}/.cache/bazel-repo" "${HOME}/.cache/bazel-disk" \
+            | tee user.bazelrc integration/user.bazelrc
+
+      # The key carries the current UTC date and the run, so every run saves
+      # its cache, and a run restores only an entry written the same day.
+      # That gives the cache a 24 hour lifetime.
+      - name: Compute the daily cache key
+        id: cachekey
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Bazel downloads and outputs
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/bazel-repo
+            ~/.cache/bazel-disk
+            ~/.cache/bazelisk
+          key: test-${{ steps.cachekey.outputs.day }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            test-${{ steps.cachekey.outputs.day }}-
+
+      - name: Build
+        run: bazel build //...
+
+      - name: Test
+        run: bazel test //...
+
+      - name: Formatting
+        run: bazel run //tools:buildifier_check
+
+      # The whole tree, integration/ included, for hermeticity escapes:
+      # host PATH or HOME in actions, unsandboxed tags, and exception tags
+      # not on the allowlist. This is hermetic_lint on hdlf_tools itself.
+      - name: Hermeticity lint
+        run: bazel run //tools:lint
+
+      # Fails when a dependency is in neither the filmil registry nor the
+      # BCR, or needs a local override.
+      - name: Dependencies resolve from the filmil registry and the BCR
+        run: bazel --ignore_all_rc_files mod graph --registry=https://raw.githubusercontent.com/filmil/bazel-registry/main --registry=https://bcr.bazel.build > /dev/null
+
+  integration:
+    runs-on: ubuntu-latest
+    container: buildpack-deps:bullseye-curl@sha256:7c8d79c31eb106cca055357456a2fa89b10fa20f254da6fe3eca937439696c62
+    strategy:
+      fail-fast: false
+      matrix:
+        bazel: ["8.x", "9.x"]
+    steps:
+      - name: Install bazelisk
+        run: |
+          set -o errexit -o nounset -o pipefail
+          curl -fsSL -o /usr/local/bin/bazel \
+            "https://github.com/bazelbuild/bazelisk/releases/download/${BAZELISK_VERSION}/bazelisk-linux-amd64"
+          echo "${BAZELISK_SHA256}  /usr/local/bin/bazel" | sha256sum -c -
+          chmod +x /usr/local/bin/bazel
+
+      # The point of the container: none of these may be present, so a
+      # rule that works here does not depend on them.
+      - name: No Python or C compiler on the host
+        run: |
+          for t in python3 python gcc cc; do
+            if command -v "$t" >/dev/null 2>&1; then
+              echo "unexpected host tool: $t"; exit 1
+            fi
+          done
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Point Bazel at the cached directories
+        run: |
+          printf 'common --repository_cache=%s\nbuild --disk_cache=%s\n' \
+            "${HOME}/.cache/bazel-repo" "${HOME}/.cache/bazel-disk" \
+            | tee user.bazelrc integration/user.bazelrc
+
+      - name: Compute the daily cache key
+        id: cachekey
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Bazel downloads and outputs
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/bazel-repo
+            ~/.cache/bazel-disk
+            ~/.cache/bazelisk
+          key: integration-${{ matrix.bazel }}-${{ steps.cachekey.outputs.day }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            integration-${{ matrix.bazel }}-${{ steps.cachekey.outputs.day }}-
+
+      # Every dependency other than hdlf_tools resolves from the published
+      # registries, the filmil registry first, then the BCR. hdlf_tools
+      # itself comes from the parent directory (local_path_override).
+      - name: Integration dependencies resolve from the filmil registry and the BCR
+        working-directory: integration
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel }}
+        run: bazel --ignore_all_rc_files mod graph --registry=https://raw.githubusercontent.com/filmil/bazel-registry/main --registry=https://bcr.bazel.build > /dev/null
+
+      - name: Test the integration module with Bazel ${{ matrix.bazel }}
+        working-directory: integration
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel }}
+        run: bazel test //...
+
+      # hermetic_lint as a module uses it: run on the integration module's
+      # own tree, which is clean.
+      - name: Run the lint in the integration module with Bazel ${{ matrix.bazel }}
+        working-directory: integration
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel }}
+        run: bazel run //:lint
+
+      # The same target on a known-bad tree: a second file that starts an
+      # action. It must fail and name the file.
+      - name: The lint fails on a known-bad file with Bazel ${{ matrix.bazel }}
+        working-directory: integration
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel }}
+        run: |
+          set -o nounset -o pipefail
+          printf 'def f(ctx):\n    ctx.actions.run(executable = ctx.executable.x)\n' > private/elsewhere.bzl
+          if bazel run //:lint > "${HOME}/bad.log" 2>&1; then
+            cat "${HOME}/bad.log"; echo "the lint passed a known-bad file"; exit 1
+          fi
+          grep -F "private/elsewhere.bzl:2: [action-outside-run-tool]" "${HOME}/bad.log"
+          rm private/elsewhere.bzl

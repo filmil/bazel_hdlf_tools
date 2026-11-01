@@ -1,0 +1,4 @@
+# `integration` is its own Bazel module, built by `cd integration && bazel
+# test //...`. Without this line the parent build would try to load its
+# BUILD.bazel, where `@hdlf_tools` does not resolve.
+integration

@@ -1,0 +1,5 @@
+build \
+  --action_env=PATH
+build --incompatible_strict_action_env \
+  --test_env \
+  HOME

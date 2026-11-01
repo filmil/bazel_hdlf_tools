@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+# The hermeticity lint (spec: "A lint test scans all .bzl and BUILD.bazel
+# files for the forbidden flags and tags").
+#
+# A module runs it through hermetic_lint (defs.bzl), a `bazel run` target
+# that scans the module's whole tree, its integration module included. No
+# test can take a separate module's files as inputs, so the scan is not a
+# test; the module's CI runs it on every pull request.
+#
+# The test below checks the scanner on known-bad and known-good fixtures.
+
+go_library(
+    name = "lint_lib",
+    srcs = ["lint.go"],
+    importpath = "github.com/filmil/bazel_hdlf_tools/tools/lint",
+    visibility = ["//visibility:private"],
+)
+
+go_test(
+    name = "lint_test",
+    size = "small",
+    srcs = ["lint_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":lint_lib"],
+    pure = "on",
+)
+
+go_library(
+    name = "cmd_lib",
+    srcs = ["cmd/main.go"],
+    importpath = "github.com/filmil/bazel_hdlf_tools/tools/lint/cmd",
+    visibility = ["//visibility:private"],
+    deps = [":lint_lib"],
+)
+
+go_binary(
+    name = "lint",
+    embed = [":cmd_lib"],
+    pure = "on",
+    visibility = ["//visibility:public"],
+)
+
+# The command: exit codes, --run_tool=none, an absolute --allowlist, on
+# trees it writes for each case.
+go_test(
+    name = "lint_cmd_test",
+    size = "small",
+    srcs = ["cmd/main_test.go"],
+    embed = [":cmd_lib"],
+    pure = "on",
+)
+
+exports_files(["defs.bzl"])

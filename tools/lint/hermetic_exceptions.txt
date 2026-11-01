@@ -1,0 +1,8 @@
+# Targets allowed to carry an exception tag (requires-network,
+# requires-root, requires-fakeroot), one per line:
+#
+#   //path/to/package:target  reason a person approved
+#
+# A tag in a .bzl macro body is listed by the file, as //pkg:file.bzl.
+# Adding a line needs the operator's approval (AGENTS.md rule 7). Each
+# listed test is excluded in .bazelrc and runs in its own CI job.

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# hdlf_tools: development tools shared by the hdlf_rules modules. A module
+# takes it as a dev dependency only, so its users never see it.
+module(
+    name = "hdlf_tools",
+    version = "0.0.0",
+    bazel_compatibility = [">=8.0.0"],
+)
+
+# The tools are pure Go, built from source; rules_go brings its own Go SDK,
+# so no C++ toolchain is needed.
+bazel_dep(name = "rules_go", version = "0.64.2")
+
+bazel_dep(name = "buildifier_prebuilt", version = "10.1.0", dev_dependency = True)

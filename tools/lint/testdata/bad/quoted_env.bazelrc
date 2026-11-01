@@ -1,0 +1,3 @@
+build --action_env="PATH=/usr/bin"
+build --host_action_env='HOME=/tmp'
+build --test_env	  PATH

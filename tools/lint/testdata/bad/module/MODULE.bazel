@@ -1,0 +1,4 @@
+module(name = "leaky")
+
+tool = use_extension("//:ext.bzl", "tool")
+tool.flags(extra = ["--action_env=PATH"])

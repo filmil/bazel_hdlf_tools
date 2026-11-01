@@ -1,0 +1,3 @@
+# --action_env=PATH would be wrong; this comment is not a flag.
+build --incompatible_strict_action_env
+build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
