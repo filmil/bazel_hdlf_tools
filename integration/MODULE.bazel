@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# An example user of hdlf_tools, laid out like an hdlf_rules module: its
+# run_tool.bzl in a private package, its allowlist in tools/lint. The
+# override makes hdlf_tools resolve to the parent directory, so
+# `cd integration && bazel test //...` exercises the working tree.
+module(
+    name = "hdlf_tools_integration",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "hdlf_tools", version = "0.0.0", dev_dependency = True)
+local_path_override(
+    module_name = "hdlf_tools",
+    path = "..",
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.9.2")

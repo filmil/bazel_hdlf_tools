@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@hdlf_tools//tools/lint:defs.bzl", "hermetic_lint")
+
+# bazel run //:lint scans this module's tree; CI runs it and wants it clean.
+hermetic_lint(
+    name = "lint",
+    run_tool = "private/run_tool.bzl",
+)
+
+build_test(
+    name = "lint_builds",
+    size = "small",
+    targets = [":lint"],
+)
