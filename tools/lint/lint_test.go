@@ -56,6 +56,8 @@ var badCases = map[string][]at{
 	"testdata/bad/action_env_home.bazelrc":    {{"host-env", 1}},
 	"testdata/bad/two_on_a_line.bazelrc":      {{"host-env", 1}, {"host-env", 1}},
 	"testdata/bad/escaped_tags.BUILD":         {{"forbidden-tag", 3}, {"exception-tag", 8}, {"forbidden-tag", 8}},
+	"testdata/bad/tags_constant.bzl":          {{"exception-tag", 6}, {"forbidden-tag", 6}},
+	"testdata/bad/split_key.bzl":              {{"forbidden-tag", 2}},
 	"testdata/bad/quoted_env.bazelrc":         {{"host-env", 1}, {"host-env", 2}, {"host-env", 3}},
 	"testdata/bad/workflows/ci.yml":           {{"host-env", 4}},
 	"testdata/bad/module/MODULE.bazel":        {{"host-env", 4}},
@@ -105,6 +107,7 @@ func TestGoodFixturesPass(t *testing.T) {
 		"good:allowed_network":  "a person approved it",
 		"good:allowed_root":     "a person approved it",
 		"good:allowed_fakeroot": "a person approved it",
+		"good:fetches":          "a person approved it",
 	}
 	for _, f := range []string{
 		"testdata/good/clean.BUILD",
@@ -114,6 +117,7 @@ func TestGoodFixturesPass(t *testing.T) {
 		"testdata/good/attrs.bzl",
 		"testdata/good/attr_doc.bzl",
 		"testdata/good/attr_named_local.bzl",
+		"testdata/good/raw_name.BUILD",
 	} {
 		if got := scanFile(t, f, "good", allow); len(got) != 0 {
 			t.Errorf("%s: want no findings, got %v", f, got)

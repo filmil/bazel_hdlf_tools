@@ -372,7 +372,8 @@ type span struct {
 func literal(masked string, strs []str, from, to int) string {
 	for _, t := range strs {
 		if t.start >= from && t.end <= to {
-			if strings.TrimSpace(masked[from:t.start]) == "" && strings.TrimSpace(masked[t.end:to]) == "" {
+			pre := strings.TrimSpace(masked[from:t.start])
+			if (pre == "" || strings.EqualFold(pre, "r")) && strings.TrimSpace(masked[t.end:to]) == "" {
 				return t.val
 			}
 			return ""
@@ -450,6 +451,7 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 	// Only the attribute's default names a tool; its doc and other
 	// arguments do not. A default may be a constant set at the top level.
 	consts := constants(masked, d, strs)
+	constStrs := constantLiterals(masked, d, strs)
 	for _, t := range strs {
 		rest := strings.TrimLeft(masked[t.end:], " \t\r\n")
 		if !strings.HasPrefix(t.val, "_") || !strings.HasPrefix(rest, ":") {
@@ -478,6 +480,7 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 	// execution requirements built apart from the call. A key whose value is
 	// an attr.*() call names a rule attribute, not a tag.
 	var uses []str
+	var refs [][2]int // names in tags expressions, such as tags = _TAGS
 	seen := map[int]bool{}
 	for _, loc := range reTags.FindAllStringIndex(masked, -1) {
 		from := loc[1] - 1
@@ -488,12 +491,26 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 				uses = append(uses, t)
 			}
 		}
+		for _, id := range reIdent.FindAllStringIndex(masked[from:to], -1) {
+			refs = append(refs, [2]int{from + id[0], from + id[1]})
+		}
 	}
 	for _, t := range strs {
-		rest := strings.TrimLeft(masked[t.end:], " \t")
+		rest := strings.TrimLeft(masked[t.end:], " \t\r\n")
 		if strings.HasPrefix(rest, ":") && !seen[t.start] && !reAttrValue.MatchString(rest[1:]) {
 			seen[t.start] = true
 			uses = append(uses, t)
+		}
+	}
+	// tags = _TAGS: the strings of a top-level constant, reported where it
+	// is used. A string already counted (a key of a constant dict) is not
+	// counted twice.
+	for _, r := range refs {
+		for _, t := range constStrs[masked[r[0]:r[1]]] {
+			if !seen[t.start] {
+				seen[t.start] = true
+				uses = append(uses, str{start: r[0], end: r[1], val: t.val})
+			}
 		}
 	}
 
@@ -532,10 +549,10 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 	return out
 }
 
-// constants maps each name assigned at the top level of a file to the
-// string literals in its value: `_TOOL = "@x//:y"` gives _TOOL: ["@x//:y"].
-func constants(masked string, d []int, strs []str) map[string][]string {
-	out := map[string][]string{}
+// constantLiterals maps each name assigned at the top level of a file to
+// the string literals in its value, with their places.
+func constantLiterals(masked string, d []int, strs []str) map[string][]str {
+	out := map[string][]str{}
 	for _, loc := range reTopAssign.FindAllStringSubmatchIndex(masked, -1) {
 		if d[loc[0]] != 0 {
 			continue
@@ -545,8 +562,20 @@ func constants(masked string, d []int, strs []str) map[string][]string {
 		name := masked[loc[2]:loc[3]]
 		for _, t := range strs {
 			if t.start >= from && t.start < to {
-				out[name] = append(out[name], t.val)
+				out[name] = append(out[name], t)
 			}
+		}
+	}
+	return out
+}
+
+// constants maps each name assigned at the top level of a file to the
+// string literals in its value: `_TOOL = "@x//:y"` gives _TOOL: ["@x//:y"].
+func constants(masked string, d []int, strs []str) map[string][]string {
+	out := map[string][]string{}
+	for name, lits := range constantLiterals(masked, d, strs) {
+		for _, t := range lits {
+			out[name] = append(out[name], t.val)
 		}
 	}
 	return out
