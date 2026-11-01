@@ -85,6 +85,10 @@ var (
 	reNameAttr = regexp.MustCompile(`\bname\s*=[^=]`)
 	reActions  = regexp.MustCompile(`\bactions\.run(?:_shell)?\s*\(`)
 	reAttrLbl  = regexp.MustCompile(`\battr\.label(?:_list|_keyed_string_dict)?\s*\(`)
+	reDefault  = regexp.MustCompile(`\bdefault\s*=[^=]`)
+	reIdent    = regexp.MustCompile(`\b[A-Za-z_]\w*\b`)
+	// A name assigned at the start of a line (depth 0 is checked apart).
+	reTopAssign = regexp.MustCompile(`(?m)^([A-Za-z_]\w*)\s*=[^=]`)
 )
 
 // Allowlist maps a target, as "path/to/package:name", to the reason a person
@@ -351,21 +355,25 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 
 	// A private attribute must not name a tool in another repository
 	// (requirement 2): tools come from ctx.toolchains.
+	// Only the attribute's default names a tool; its doc and other
+	// arguments do not. A default may be a constant set at the top level.
+	consts := constants(masked, d, strs)
 	for _, t := range strs {
-		rest := strings.TrimLeft(masked[t.end:], " \t")
+		rest := strings.TrimLeft(masked[t.end:], " \t\r\n")
 		if !strings.HasPrefix(t.val, "_") || !strings.HasPrefix(rest, ":") {
 			continue
 		}
 		from := t.end + (len(masked[t.end:]) - len(rest)) + 1
 		to := exprEnd(masked, d, from)
-		if !reAttrLbl.MatchString(masked[from:to]) {
+		call := reAttrLbl.FindStringIndex(masked[from:to])
+		if call == nil {
 			continue
 		}
-		for _, v := range strs {
-			if v.start >= from && v.start < to && external(v.val) {
+		args := from + call[1] // just inside the call's "("
+		for _, v := range defaultValues(masked, d, strs, consts, args, exprEnd(masked, d, args)) {
+			if external(v) {
 				out = append(out, Finding{path, lineAt(t.start), "private-tool-attr",
-					fmt.Sprintf("private attribute %q names %q; get tools from ctx.toolchains", t.val, v.val)})
-				break
+					fmt.Sprintf("private attribute %q names %q; get tools from ctx.toolchains", t.val, v)})
 			}
 		}
 	}
@@ -427,6 +435,51 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 		}
 	}
 	return out
+}
+
+// constants maps each name assigned at the top level of a file to the
+// string literals in its value: `_TOOL = "@x//:y"` gives _TOOL: ["@x//:y"].
+func constants(masked string, d []int, strs []str) map[string][]string {
+	out := map[string][]string{}
+	for _, loc := range reTopAssign.FindAllStringSubmatchIndex(masked, -1) {
+		if d[loc[0]] != 0 {
+			continue
+		}
+		from := loc[1] - 1
+		to := exprEnd(masked, d, from)
+		name := masked[loc[2]:loc[3]]
+		for _, t := range strs {
+			if t.start >= from && t.start < to {
+				out[name] = append(out[name], t.val)
+			}
+		}
+	}
+	return out
+}
+
+// defaultValues returns the strings of the default argument among a call's
+// arguments, masked[from:to]: its string literals, or those of the
+// top-level constant it names.
+func defaultValues(masked string, d []int, strs []str, consts map[string][]string, from, to int) []string {
+	for _, loc := range reDefault.FindAllStringIndex(masked[from:to], -1) {
+		at := from + loc[0]
+		if d[at] != d[from] {
+			continue // a default inside a nested call
+		}
+		vfrom := from + loc[1] - 1
+		vto := exprEnd(masked, d, vfrom)
+		var vals []string
+		for _, t := range strs {
+			if t.start >= vfrom && t.start < vto {
+				vals = append(vals, t.val)
+			}
+		}
+		for _, id := range reIdent.FindAllString(masked[vfrom:vto], -1) {
+			vals = append(vals, consts[id]...)
+		}
+		return vals
+	}
+	return nil
 }
 
 // external reports whether a label names another repository. Bazel's own

@@ -38,6 +38,7 @@ func rulesAndLines(fs []Finding) []at {
 var badCases = map[string][]at{
 	"testdata/bad/actions_run.bzl":         {{"action-outside-run-tool", 2}, {"action-outside-run-tool", 7}},
 	"testdata/bad/private_tool_attr.bzl":   {{"private-tool-attr", 5}, {"private-tool-attr", 10}},
+	"testdata/bad/private_tool_attr_more.bzl": {{"private-tool-attr", 6}, {"private-tool-attr", 7}, {"private-tool-attr", 7}, {"private-tool-attr", 8}},
 	"testdata/bad/shell_env.bzl":           {{"action-outside-run-tool", 2}, {"shell-env", 5}},
 	"testdata/bad/local_tag.BUILD":         {{"forbidden-tag", 7}},
 	"testdata/bad/no_sandbox_tag.BUILD":    {{"forbidden-tag", 5}},
@@ -109,6 +110,7 @@ func TestGoodFixturesPass(t *testing.T) {
 		"testdata/good/strings.BUILD",
 		"testdata/good/private/run_tool.bzl",
 		"testdata/good/attrs.bzl",
+		"testdata/good/attr_doc.bzl",
 	} {
 		if got := scanFile(t, f, "good", allow); len(got) != 0 {
 			t.Errorf("%s: want no findings, got %v", f, got)
