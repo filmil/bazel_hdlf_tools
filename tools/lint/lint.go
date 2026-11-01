@@ -85,6 +85,7 @@ var (
 	reNameAttr = regexp.MustCompile(`\bname\s*=[^=]`)
 	reActions  = regexp.MustCompile(`\bactions\.run(?:_shell)?\s*\(`)
 	reAttrLbl  = regexp.MustCompile(`\battr\.label(?:_list|_keyed_string_dict)?\s*\(`)
+	reAttrValue = regexp.MustCompile(`^\s*attr\.\w+\s*\(`)
 	reDefault  = regexp.MustCompile(`\bdefault\s*=[^=]`)
 	reIdent    = regexp.MustCompile(`\b[A-Za-z_]\w*\b`)
 	// A name assigned at the start of a line (depth 0 is checked apart).
@@ -469,7 +470,8 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 	// Values that act as tags: every string in a tags or
 	// execution_requirements expression (a list, a concatenation, a select,
 	// a dict), and every string used as a dict key anywhere, which covers
-	// execution requirements built apart from the call.
+	// execution requirements built apart from the call. A key whose value is
+	// an attr.*() call names a rule attribute, not a tag.
 	var uses []str
 	seen := map[int]bool{}
 	for _, loc := range reTags.FindAllStringIndex(masked, -1) {
@@ -484,7 +486,7 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 	}
 	for _, t := range strs {
 		rest := strings.TrimLeft(masked[t.end:], " \t")
-		if strings.HasPrefix(rest, ":") && !seen[t.start] {
+		if strings.HasPrefix(rest, ":") && !seen[t.start] && !reAttrValue.MatchString(rest[1:]) {
 			seen[t.start] = true
 			uses = append(uses, t)
 		}

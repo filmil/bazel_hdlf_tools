@@ -112,6 +112,7 @@ func TestGoodFixturesPass(t *testing.T) {
 		"testdata/good/private/run_tool.bzl",
 		"testdata/good/attrs.bzl",
 		"testdata/good/attr_doc.bzl",
+		"testdata/good/attr_named_local.bzl",
 	} {
 		if got := scanFile(t, f, "good", allow); len(got) != 0 {
 			t.Errorf("%s: want no findings, got %v", f, got)
