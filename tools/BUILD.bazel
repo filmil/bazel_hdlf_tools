@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# Development tools. They use the module's dev dependencies, so they live
+# apart from the packages a user of the module loads.
+load("@buildifier_prebuilt//:rules.bzl", "buildifier")
+
+# bazel run //tools:buildifier
+buildifier(
+    name = "buildifier",
+    # Lint fixtures are deliberately bad; formatting would move their lines.
+    exclude_patterns = ["./tools/lint/testdata/*"],
+    lint_mode = "warn",
+    mode = "fix",
+)
+
+# bazel run //tools:buildifier_check: fails on any file that is not formatted.
+buildifier(
+    name = "buildifier_check",
+    # Lint fixtures are deliberately bad; formatting would move their lines.
+    exclude_patterns = ["./tools/lint/testdata/*"],
+    lint_mode = "warn",
+    mode = "check",
+)

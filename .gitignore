@@ -1,0 +1,5 @@
+/bazel-*
+/integration/bazel-*
+user.bazelrc
+MODULE.bazel.lock
+/integration/MODULE.bazel.lock
