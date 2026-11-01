@@ -157,8 +157,9 @@ jobs:
           restore-keys: |
             integration-${{ matrix.bazel }}-${{ steps.cachekey.outputs.day }}-
 
-      # Every dependency resolves from the published registries: the
-      # filmil registry first, then the BCR.
+      # Every dependency other than hdlf_tools resolves from the published
+      # registries, the filmil registry first, then the BCR. hdlf_tools
+      # itself comes from the parent directory (local_path_override).
       - name: Integration dependencies resolve from the filmil registry and the BCR
         working-directory: integration
         env:
@@ -178,3 +179,18 @@ jobs:
         env:
           USE_BAZEL_VERSION: ${{ matrix.bazel }}
         run: bazel run //:lint
+
+      # The same target on a known-bad tree: a second file that starts an
+      # action. It must fail and name the file.
+      - name: The lint fails on a known-bad file with Bazel ${{ matrix.bazel }}
+        working-directory: integration
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel }}
+        run: |
+          set -o nounset -o pipefail
+          printf 'def f(ctx):\n    ctx.actions.run(executable = ctx.executable.x)\n' > private/elsewhere.bzl
+          if bazel run //:lint > "${HOME}/bad.log" 2>&1; then
+            cat "${HOME}/bad.log"; echo "the lint passed a known-bad file"; exit 1
+          fi
+          grep -F "private/elsewhere.bzl:2: [action-outside-run-tool]" "${HOME}/bad.log"
+          rm private/elsewhere.bzl

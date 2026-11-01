@@ -15,6 +15,6 @@ cat <<EOF
 ## Using Bzlmod
 
 \`\`\`starlark
-bazel_dep(name = "hdlf_tools", version = "${VERSION}")
+bazel_dep(name = "hdlf_tools", version = "${VERSION}", dev_dependency = True)
 \`\`\`
 EOF
