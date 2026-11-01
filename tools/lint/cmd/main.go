@@ -50,7 +50,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "hermetic_lint:", err)
 		os.Exit(2)
 	}
-	findings, err := lint.Walk(*root, lint.Config{Allow: allow, RunTool: filepath.ToSlash(*runTool)})
+	findings, err := lint.Walk(*root, lint.Config{Allow: allow, AllowlistPath: *allowPath, RunTool: filepath.ToSlash(*runTool)})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "hermetic_lint:", err)
 		os.Exit(2)

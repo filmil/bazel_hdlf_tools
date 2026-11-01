@@ -78,6 +78,9 @@ var (
 	// space, and the same for --host_action_env and --test_env. A fixed
 	// value is refused too: it names a host directory.
 	reHostEnv = regexp.MustCompile(`--(?:host_)?(?:action|test)_env(?:=|\s+)["']?(PATH|HOME)\b`)
+	// A flag that takes its value from the next argument, and that value.
+	reEnvFlag  = regexp.MustCompile(`^--(?:host_)?(?:action|test)_env$`)
+	reEnvValue = regexp.MustCompile(`^(PATH|HOME)\b`)
 	// These match the masked text, where string contents are blanked.
 	reShellEnv  = regexp.MustCompile(`\buse_default_shell_env\s*=\s*True\b`)
 	reLocal     = regexp.MustCompile(`\blocal\s*=\s*(?:True|1)\b`)
@@ -123,10 +126,20 @@ func ParseAllowlist(data []byte) (Allowlist, error) {
 type Config struct {
 	// Allow lists the targets allowed to carry an exception tag.
 	Allow Allowlist
+	// AllowlistPath is where Allow was read from, for messages. Empty:
+	// the default, tools/lint/hermetic_exceptions.txt.
+	AllowlistPath string
 	// RunTool is the module's run_tool.bzl, relative to the root (for
 	// example "em/private/run_tool.bzl"): the only file allowed to start
 	// actions that run a tool. Empty: no file may.
 	RunTool string
+}
+
+func (c Config) allowlistName() string {
+	if c.AllowlistPath == "" {
+		return "tools/lint/hermetic_exceptions.txt"
+	}
+	return c.AllowlistPath
 }
 
 // Under returns p, a path given on the command line, as a path to open: p
@@ -158,14 +171,29 @@ func hostEnvMsg(v string) string {
 	return fmt.Sprintf("sets %s for actions from the command line; tools come from toolchains and run_tool sets HOME", v)
 }
 
+// scanFlags reads a .bazelrc or a workflow line by line. A line that ends in
+// a backslash continues on the next, as in .bazelrc; a finding is reported
+// at the first line of the joined line.
 func scanFlags(path, src string) []Finding {
 	var out []Finding
-	for i, line := range strings.Split(src, "\n") {
+	lines := strings.Split(src, "\n")
+	for i := 0; i < len(lines); i++ {
+		first := i
+		line := lines[i]
 		if j := strings.Index(line, "#"); j >= 0 {
 			line = line[:j]
 		}
+		for strings.HasSuffix(strings.TrimRight(line, " \t\r"), "\\") && i+1 < len(lines) {
+			line = strings.TrimSuffix(strings.TrimRight(line, " \t\r"), "\\") + " "
+			i++
+			next := lines[i]
+			if j := strings.Index(next, "#"); j >= 0 {
+				next = next[:j]
+			}
+			line += next
+		}
 		for _, m := range reHostEnv.FindAllStringSubmatch(line, -1) {
-			out = append(out, Finding{path, i + 1, "host-env", hostEnvMsg(m[1])})
+			out = append(out, Finding{path, first + 1, "host-env", hostEnvMsg(m[1])})
 		}
 	}
 	return out
@@ -428,9 +456,15 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 		out = append(out, Finding{path, lineAt(loc[0]), "forbidden-tag",
 			"local = True runs the action outside the sandbox"})
 	}
-	for _, t := range strs {
+	for k, t := range strs {
 		for _, m := range reHostEnv.FindAllStringSubmatch(t.val, -1) {
 			out = append(out, Finding{path, lineAt(t.start), "host-env", hostEnvMsg(m[1])})
+		}
+		// A flag and its value as two strings: ["--action_env", "PATH"].
+		if k+1 < len(strs) && reEnvFlag.MatchString(t.val) {
+			if m := reEnvValue.FindStringSubmatch(strs[k+1].val); m != nil {
+				out = append(out, Finding{path, lineAt(t.start), "host-env", hostEnvMsg(m[1])})
+			}
 		}
 	}
 
@@ -542,7 +576,7 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 			l := label(u.start)
 			if _, ok := cfg.Allow[l]; !ok {
 				out = append(out, Finding{path, lineAt(u.start), "exception-tag",
-					fmt.Sprintf("%q on //%s needs a line in tools/lint/hermetic_exceptions.txt, approved by a person", ex, l)})
+					fmt.Sprintf("%q on //%s needs a line in %s, approved by a person", ex, l, cfg.allowlistName())})
 			}
 		}
 	}

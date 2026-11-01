@@ -58,6 +58,8 @@ var badCases = map[string][]at{
 	"testdata/bad/escaped_tags.BUILD":         {{"forbidden-tag", 3}, {"exception-tag", 8}, {"forbidden-tag", 8}},
 	"testdata/bad/tags_constant.bzl":          {{"exception-tag", 6}, {"forbidden-tag", 6}},
 	"testdata/bad/split_key.bzl":              {{"forbidden-tag", 2}},
+	"testdata/bad/continued.bazelrc":          {{"host-env", 1}, {"host-env", 3}},
+	"testdata/bad/split_flag.bzl":             {{"host-env", 2}, {"host-env", 2}},
 	"testdata/bad/quoted_env.bazelrc":         {{"host-env", 1}, {"host-env", 2}, {"host-env", 3}},
 	"testdata/bad/workflows/ci.yml":           {{"host-env", 4}},
 	"testdata/bad/module/MODULE.bazel":        {{"host-env", 4}},
@@ -301,5 +303,14 @@ y'`: "xy",
 		if len(strs) != 1 || strs[0].val != want {
 			t.Errorf("%s: got %q, want %q", src, strs, want)
 		}
+	}
+}
+
+// The exception-tag message names the allowlist the module uses.
+func TestMessageNamesAllowlist(t *testing.T) {
+	src := []byte("sh_test(name = \"t\", tags = [\"requires-network\"])\n")
+	got := Scan("BUILD.bazel", "", src, Config{AllowlistPath: "lint/allow.txt"})
+	if len(got) != 1 || !strings.Contains(got[0].Msg, "lint/allow.txt") {
+		t.Errorf("want one finding naming lint/allow.txt, got %v", got)
 	}
 }
