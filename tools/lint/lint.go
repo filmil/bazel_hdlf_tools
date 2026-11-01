@@ -73,10 +73,11 @@ var ForbiddenTags = []string{"local", "no-sandbox"}
 var ExceptionTags = []string{"requires-network", "requires-root", "requires-fakeroot"}
 
 var (
-	// --action_env=PATH, --action_env PATH, --action_env=HOME=/x, and the
-	// same for --host_action_env and --test_env. A fixed value is refused
-	// too: it names a host directory.
-	reHostEnv = regexp.MustCompile(`--(?:host_)?(?:action|test)_env[= ](PATH|HOME)\b`)
+	// --action_env=PATH, --action_env PATH, --action_env=HOME=/x, the same
+	// quoted (--action_env="PATH=/x", --action_env 'HOME') or with more
+	// space, and the same for --host_action_env and --test_env. A fixed
+	// value is refused too: it names a host directory.
+	reHostEnv = regexp.MustCompile(`--(?:host_)?(?:action|test)_env(?:=|\s+)["']?(PATH|HOME)\b`)
 	// These match the masked text, where string contents are blanked.
 	reShellEnv = regexp.MustCompile(`\buse_default_shell_env\s*=\s*True\b`)
 	reLocal    = regexp.MustCompile(`\blocal\s*=\s*(?:True|1)\b`)

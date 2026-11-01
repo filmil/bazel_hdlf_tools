@@ -53,6 +53,7 @@ var badCases = map[string][]at{
 	"testdata/bad/action_env.bazelrc":      {{"host-env", 1}},
 	"testdata/bad/action_env_home.bazelrc": {{"host-env", 1}},
 	"testdata/bad/two_on_a_line.bazelrc":   {{"host-env", 1}, {"host-env", 1}},
+	"testdata/bad/quoted_env.bazelrc":      {{"host-env", 1}, {"host-env", 2}, {"host-env", 3}},
 	"testdata/bad/workflows/ci.yml":        {{"host-env", 4}},
 	"testdata/bad/module/MODULE.bazel":     {{"host-env", 4}},
 }
