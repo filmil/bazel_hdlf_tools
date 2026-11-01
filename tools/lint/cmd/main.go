@@ -15,6 +15,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -22,45 +23,57 @@ import (
 )
 
 func main() {
-	root := flag.String("root", os.Getenv("BUILD_WORKSPACE_DIRECTORY"),
+	os.Exit(run(os.Args[1:], os.Getenv("BUILD_WORKSPACE_DIRECTORY"), os.Stdout, os.Stderr))
+}
+
+// run is the command, apart from the process: it returns the exit code, 0
+// when the tree is clean, 1 when there are findings, 2 on a usage or read
+// error.
+func run(args []string, workspace string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("hermetic_lint", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	root := fs.String("root", workspace,
 		"repository root to scan (default: the workspace of `bazel run`)")
-	allowPath := flag.String("allowlist", "tools/lint/hermetic_exceptions.txt",
+	allowPath := fs.String("allowlist", "tools/lint/hermetic_exceptions.txt",
 		"allowlist of exception tags, relative to the root unless absolute")
-	runTool := flag.String("run_tool", "",
+	runTool := fs.String("run_tool", "",
 		"the module's run_tool.bzl, relative to the root: the only file that may start actions; \"none\" if no file may (required)")
-	flag.Parse()
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *root == "" {
+		fmt.Fprintln(stderr, "hermetic_lint: no root; run it with `bazel run` or pass --root")
+		return 2
+	}
 	if *runTool == "" {
-		fmt.Fprintln(os.Stderr, "hermetic_lint: --run_tool is required, e.g. --run_tool=em/private/run_tool.bzl, or --run_tool=none")
-		os.Exit(2)
+		fmt.Fprintln(stderr, "hermetic_lint: --run_tool is required, e.g. --run_tool=em/private/run_tool.bzl, or --run_tool=none")
+		return 2
 	}
 	if *runTool == "none" {
 		*runTool = ""
 	}
-	if *root == "" {
-		fmt.Fprintln(os.Stderr, "hermetic_lint: no root; run it with `bazel run` or pass --root")
-		os.Exit(2)
-	}
 	data, err := os.ReadFile(lint.Under(*root, *allowPath))
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "hermetic_lint:", err)
-		os.Exit(2)
+		fmt.Fprintln(stderr, "hermetic_lint:", err)
+		return 2
 	}
 	allow, err := lint.ParseAllowlist(data)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "hermetic_lint:", err)
-		os.Exit(2)
+		fmt.Fprintln(stderr, "hermetic_lint:", err)
+		return 2
 	}
 	findings, err := lint.Walk(*root, lint.Config{Allow: allow, AllowlistPath: *allowPath, RunTool: filepath.ToSlash(*runTool)})
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "hermetic_lint:", err)
-		os.Exit(2)
+		fmt.Fprintln(stderr, "hermetic_lint:", err)
+		return 2
 	}
 	for _, f := range findings {
-		fmt.Println(f)
+		fmt.Fprintln(stdout, f)
 	}
 	if len(findings) > 0 {
-		fmt.Fprintf(os.Stderr, "hermetic_lint: %d finding(s)\n", len(findings))
-		os.Exit(1)
+		fmt.Fprintf(stderr, "hermetic_lint: %d finding(s)\n", len(findings))
+		return 1
 	}
-	fmt.Println("hermetic_lint: clean")
+	fmt.Fprintln(stdout, "hermetic_lint: clean")
+	return 0
 }

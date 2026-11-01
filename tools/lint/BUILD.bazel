@@ -27,12 +27,29 @@ go_test(
     pure = "on",
 )
 
+go_library(
+    name = "cmd_lib",
+    srcs = ["cmd/main.go"],
+    importpath = "github.com/filmil/bazel_hdlf_tools/tools/lint/cmd",
+    visibility = ["//visibility:private"],
+    deps = [":lint_lib"],
+)
+
 go_binary(
     name = "lint",
-    srcs = ["cmd/main.go"],
+    embed = [":cmd_lib"],
     pure = "on",
     visibility = ["//visibility:public"],
-    deps = [":lint_lib"],
+)
+
+# The command: exit codes, --run_tool=none, an absolute --allowlist, on
+# trees it writes for each case.
+go_test(
+    name = "lint_cmd_test",
+    size = "small",
+    srcs = ["cmd/main_test.go"],
+    embed = [":cmd_lib"],
+    pure = "on",
 )
 
 exports_files(["defs.bzl"])
