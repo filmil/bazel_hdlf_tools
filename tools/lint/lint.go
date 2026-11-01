@@ -179,8 +179,10 @@ type str struct {
 // tokenize finds the string literals and comments of a Starlark file. It
 // returns the source with comments and string contents blanked (quotes and
 // line breaks kept, so offsets and line numbers stay right), and the
-// literals in order. Triple-quoted strings and escapes are handled; string
-// prefixes such as r or b stay in the masked text as letters.
+// literals in order, with their escapes decoded ("no-\x73andbox" is
+// "no-sandbox"). Triple-quoted strings are handled; string prefixes such as
+// r or b stay in the masked text as letters, and a raw string keeps its
+// backslashes.
 func tokenize(src string) (string, []str) {
 	m := []byte(src)
 	var strs []str
@@ -221,12 +223,98 @@ func tokenize(src string) (string, []str) {
 			if strings.HasPrefix(src[i:], q) {
 				i += len(q)
 			}
-			strs = append(strs, str{start, i, val.String()})
+			v := val.String()
+			if !rawPrefix(src, start) {
+				v = unescape(v)
+			}
+			strs = append(strs, str{start, i, v})
 		default:
 			i++
 		}
 	}
 	return string(m), strs
+}
+
+// rawPrefix reports whether the literal at start has an r prefix (r"...",
+// rb"...", br"..."), so its backslashes are not escapes.
+func rawPrefix(src string, start int) bool {
+	k := start
+	for k > 0 && k > start-2 && strings.ContainsRune("rRbB", rune(src[k-1])) {
+		k--
+	}
+	if k > 0 && (isIdent(src[k-1])) {
+		return false // the letters end an identifier, such as `attr` in attr"x"
+	}
+	return strings.ContainsAny(src[k:start], "rR")
+}
+
+func isIdent(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
+// unescape decodes Starlark's escapes in a string literal's body: \n and
+// the other single letters, \ooo, \xhh, \uhhhh, \Uhhhhhhhh, and a
+// backslash before a line break, which joins the lines. An unknown escape
+// stays as written, as Starlark keeps it.
+func unescape(v string) string {
+	if !strings.Contains(v, "\\") {
+		return v
+	}
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] != '\\' || i+1 >= len(v) {
+			b.WriteByte(v[i])
+			continue
+		}
+		c := v[i+1]
+		if r, ok := map[byte]string{'a': "\a", 'b': "\b", 'f': "\f", 'n': "\n", 'r': "\r", 't': "\t", 'v': "\v", '\\': "\\", '\'': "'", '"': "\"", '\n': ""}[c]; ok {
+			b.WriteString(r)
+			i++
+			continue
+		}
+		digits, base, max := 0, 0, 0
+		switch {
+		case c >= '0' && c <= '7':
+			digits, base, max = 0, 8, 3
+		case c == 'x':
+			digits, base, max = 1, 16, 2
+		case c == 'u':
+			digits, base, max = 1, 16, 4
+		case c == 'U':
+			digits, base, max = 1, 16, 8
+		default:
+			b.WriteByte(v[i])
+			continue
+		}
+		j := i + 1 + digits
+		n := 0
+		for j < len(v) && j < i+1+digits+max {
+			x := strings.IndexByte("0123456789abcdef", lower(v[j]))
+			if x < 0 || x >= base {
+				break
+			}
+			n = n*base + x
+			j++
+		}
+		if j == i+1+digits {
+			b.WriteByte(v[i]) // no digits: not an escape
+			continue
+		}
+		if c == 'x' || (c >= '0' && c <= '7') {
+			b.WriteByte(byte(n))
+		} else {
+			b.WriteRune(rune(n))
+		}
+		i = j - 1
+	}
+	return b.String()
+}
+
+func lower(c byte) byte {
+	if c >= 'A' && c <= 'Z' {
+		return c + 'a' - 'A'
+	}
+	return c
 }
 
 func blank(m []byte, from, to int) {

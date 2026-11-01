@@ -54,6 +54,7 @@ var badCases = map[string][]at{
 	"testdata/bad/action_env.bazelrc":      {{"host-env", 1}},
 	"testdata/bad/action_env_home.bazelrc": {{"host-env", 1}},
 	"testdata/bad/two_on_a_line.bazelrc":   {{"host-env", 1}, {"host-env", 1}},
+	"testdata/bad/escaped_tags.BUILD":      {{"forbidden-tag", 3}, {"exception-tag", 8}, {"forbidden-tag", 8}},
 	"testdata/bad/quoted_env.bazelrc":      {{"host-env", 1}, {"host-env", 2}, {"host-env", 3}},
 	"testdata/bad/workflows/ci.yml":        {{"host-env", 4}},
 	"testdata/bad/module/MODULE.bazel":     {{"host-env", 4}},
@@ -258,5 +259,27 @@ func TestUnder(t *testing.T) {
 	}
 	if got := Under("/repo", "/abs/x.txt"); got != "/abs/x.txt" {
 		t.Errorf("absolute: got %q", got)
+	}
+}
+
+// Escapes are decoded as Starlark decodes them; a raw string keeps its
+// backslashes.
+func TestStringEscapes(t *testing.T) {
+	for src, want := range map[string]string{
+		`"no-\x73andbox"`:  "no-sandbox",
+		`"lo\143al"`:       "local",
+		`"a\u00e9"`:        "a\u00e9",
+		`"a\nb\tc\\d"`:  "a\nb\tc\\d",
+		`"q\"q"`:           `q"q`,
+		`'x\
+y'`: "xy",
+		`"\q"`:            `\q`,
+		`r"no-\x73"`:      `no-\x73`,
+		`attr"\x41"`:      "A",
+	} {
+		_, strs := tokenize(src)
+		if len(strs) != 1 || strs[0].val != want {
+			t.Errorf("%s: got %q, want %q", src, strs, want)
+		}
 	}
 }
