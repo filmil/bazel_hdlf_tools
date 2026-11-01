@@ -256,6 +256,9 @@ func TestRunToolIsOneFile(t *testing.T) {
 	if got := Scan("m/private/run_tool.bzl", "m/private", src, cfg); len(got) != 0 {
 		t.Errorf("the module's run_tool.bzl: want no findings, got %v", got)
 	}
+	if got := Scan("m/private/run_tool.bzl", "m/private", src, Config{}); len(got) != 1 {
+		t.Errorf("no run_tool.bzl: want one finding, got %v", got)
+	}
 	for _, other := range []string{"integration/private/run_tool.bzl", "x_private/run_tool.bzl", "n/m/private/run_tool.bzl"} {
 		got := Scan(other, filepath.Dir(other), src, cfg)
 		if !reflect.DeepEqual(rulesAndLines(got), []at{{"action-outside-run-tool", 2}}) {

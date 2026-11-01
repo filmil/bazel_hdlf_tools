@@ -2,9 +2,10 @@
 
 // Command hermetic_lint scans the source tree for hermeticity escapes.
 //
-// Run it from the repository with:
+// A module runs it through the hermetic_lint rule in
+// @hdlf_tools//tools/lint:defs.bzl, which passes the module's settings:
 //
-//	bazel run //tools/lint
+//	bazel run //tools:lint
 //
 // It walks the whole tree, the integration module included, which no Bazel
 // test can see as inputs. It prints one line per finding and exits 1 if
@@ -26,14 +27,17 @@ func main() {
 	allowPath := flag.String("allowlist", "tools/lint/hermetic_exceptions.txt",
 		"allowlist of exception tags, relative to the root unless absolute")
 	runTool := flag.String("run_tool", "",
-		"the module's run_tool.bzl, relative to the root: the only file that may start actions (required)")
+		"the module's run_tool.bzl, relative to the root: the only file that may start actions; \"none\" if no file may (required)")
 	flag.Parse()
 	if *runTool == "" {
-		fmt.Fprintln(os.Stderr, "hermetic_lint: --run_tool is required, e.g. --run_tool=em/private/run_tool.bzl")
+		fmt.Fprintln(os.Stderr, "hermetic_lint: --run_tool is required, e.g. --run_tool=em/private/run_tool.bzl, or --run_tool=none")
 		os.Exit(2)
 	}
+	if *runTool == "none" {
+		*runTool = ""
+	}
 	if *root == "" {
-		fmt.Fprintln(os.Stderr, "hermetic_lint: no root; run it with `bazel run //tools/lint` or pass --root")
+		fmt.Fprintln(os.Stderr, "hermetic_lint: no root; run it with `bazel run` or pass --root")
 		os.Exit(2)
 	}
 	data, err := os.ReadFile(lint.Under(*root, *allowPath))

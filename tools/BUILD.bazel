@@ -2,6 +2,7 @@
 # Development tools. They use the module's dev dependencies, so they live
 # apart from the packages a user of the module loads.
 load("@buildifier_prebuilt//:rules.bzl", "buildifier")
+load("//tools/lint:defs.bzl", "hermetic_lint")
 
 # bazel run //tools:buildifier
 buildifier(
@@ -19,4 +20,12 @@ buildifier(
     exclude_patterns = ["./tools/lint/testdata/*"],
     lint_mode = "warn",
     mode = "check",
+)
+
+# bazel run //tools:lint: the hermeticity lint on this module's own tree.
+# hdlf_tools itself starts no actions; the one file that does is the
+# integration example's run_tool.bzl.
+hermetic_lint(
+    name = "lint",
+    run_tool = "integration/private/run_tool.bzl",
 )

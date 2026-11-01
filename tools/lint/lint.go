@@ -125,7 +125,7 @@ type Config struct {
 	Allow Allowlist
 	// RunTool is the module's run_tool.bzl, relative to the root (for
 	// example "em/private/run_tool.bzl"): the only file allowed to start
-	// actions that run a tool.
+	// actions that run a tool. Empty: no file may.
 	RunTool string
 }
 
@@ -436,9 +436,12 @@ func scanStarlark(path, pkg, src string, cfg Config) []Finding {
 	// Every action runs its tool through run_tool (spec "Toolchains",
 	// requirement 3), which lives in the one file cfg.RunTool names.
 	if filepath.ToSlash(path) != cfg.RunTool {
+		msg := "start actions that run a tool through run_tool, in " + cfg.RunTool
+		if cfg.RunTool == "" {
+			msg = "this module starts no actions that run a tool"
+		}
 		for _, loc := range reActions.FindAllStringIndex(masked, -1) {
-			out = append(out, Finding{path, lineAt(loc[0]), "action-outside-run-tool",
-				"start actions that run a tool through run_tool, in " + cfg.RunTool})
+			out = append(out, Finding{path, lineAt(loc[0]), "action-outside-run-tool", msg})
 		}
 	}
 
