@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# Based on the instructions at https://github.com/bazel-contrib/publish-to-bcr
+name: "Publish to my Bazel registry"
+
+on:
+  workflow_call:
+    secrets:
+      BCR_PUBLISH_TOKEN:
+        required: true
+        description: 'Token that pushes the registry branch.'
+    inputs:
+      tag_name:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag to publish"
+        required: true
+        type: string
+
+jobs:
+  publish:
+    uses: "bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@v1.5.0"
+    with:
+      tag_name: ${{ inputs.tag_name }}
+      # The filmil registry only: hdlf_tools is a dev dependency of the
+      # hdlf_rules modules and is not published to the BCR.
+      registry: filmil/bazel-registry
+      # This is the fork of `registry`. It can be the same repo.
+      registry_fork: filmil/bazel-registry
+      attest: false
+      draft: false
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    secrets:
+      publish_token: ${{ secrets.BCR_PUBLISH_TOKEN }}
+

@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: Apache-2.0
+# When run:
+# * skips everything when HEAD is already released;
+# * tags a new release based on main top of tree (at least a patch bump);
+# * builds the source archive with git archive and uploads it;
+# * publishes the release to the filmil registry.
+#
+# It runs by hand only: a release is the operator's to run.
+name: Tag and Release
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: >-
+          Release and publish even when HEAD is already released. Bumps the
+          patch version.
+        type: boolean
+        default: false
+        required: false
+
+jobs:
+  # A release only happens when something was committed since the last tag.
+  # Without this check a scheduled or repeated run would release the same
+  # tree again under a new version. Every job below depends on its answer.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.changes.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history and tags: `git describe` needs both, and the default
+          # shallow checkout has neither.
+          fetch-depth: 0
+      - name: Look for commits since the last release
+        id: changes
+        run: |
+          set -o errexit -o nounset -o pipefail
+          if [ "${{ inputs.force_publish }}" = "true" ]; then
+            echo "Forced publish requested; releasing."
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          latest="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          if [ -z "${latest}" ]; then
+            echo "No tag yet; releasing."
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [ "$(git rev-list -n 1 "${latest}")" = "$(git rev-parse HEAD)" ]; then
+            echo "HEAD is already released as ${latest}. Nothing to release."
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "$(git rev-list --count "${latest}"..HEAD) commit(s) since ${latest}; releasing."
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+  tag:
+    needs: check
+    if: ${{ needs.check.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag_name: ${{ steps.tag_version.outputs.new_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release_branches: main
+          # At least a patch bump, so commits such as `chore:` still release.
+          # The `check` job above already stops a run on a HEAD that is
+          # released, so this cannot release the same tree twice.
+          default_bump: patch
+
+  release:
+    needs: tag
+    if: ${{ needs.tag.outputs.tag_name != '' }}
+    permissions:
+      contents: write      # upload release files
+      id-token: write      # attest provenance
+      attestations: write  # attest provenance
+    uses: bazel-contrib/.github/.github/workflows/release_ruleset.yaml@v7.7.0
+    with:
+      tag_name: ${{ needs.tag.outputs.tag_name }}
+      release_files: bazel_hdlf_tools-${{ needs.tag.outputs.tag_name }}.zip
+      prerelease: false
+
+  # `publish` needs `tag` and `release`, so a skipped `tag` skips it too;
+  # the guard here additionally covers a `tag` job that ran but produced no tag.
+  publish:
+    needs: [tag, release]
+    if: ${{ needs.tag.outputs.tag_name != '' }}
+    uses: ./.github/workflows/publish.yml
+    with:
+      tag_name: ${{ needs.tag.outputs.tag_name }}
+    secrets:
+      BCR_PUBLISH_TOKEN: ${{ secrets.BCR_PUBLISH_TOKEN }}
+
