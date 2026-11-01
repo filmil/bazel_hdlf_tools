@@ -1,0 +1,1 @@
+build --host_action_env=PATH --action_env=HOME=/tmp/fixed
