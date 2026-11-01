@@ -204,6 +204,17 @@ func TestWalk(t *testing.T) {
 	write("other/testdata/BUILD.bazel", "genrule(name = \"seen\", local = 1)\n")
 	write(".bazelrc", "build --action_env=HOME\n")
 	write("notes.txt", "use_default_shell_env = True\n")
+	// Skipped: .git, a bazel-* directory, and a bazel-* link (Bazel's
+	// convenience links are symlinks to directories outside the tree).
+	write(".git/BUILD.bazel", "genrule(name = \"git\", local = 1)\n")
+	write("bazel-out/BUILD.bazel", "genrule(name = \"out\", local = 1)\n")
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "BUILD.bazel"), []byte("genrule(name = \"link\", local = 1)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "bazel-bin")); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := Walk(root, Config{RunTool: "m/private/run_tool.bzl"})
 	if err != nil {
