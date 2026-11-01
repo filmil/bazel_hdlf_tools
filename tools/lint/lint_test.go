@@ -36,28 +36,28 @@ func rulesAndLines(fs []Finding) []at {
 // give (spec T3: each check fails on its known-bad input). Extra findings
 // fail the test as well as missing ones.
 var badCases = map[string][]at{
-	"testdata/bad/actions_run.bzl":         {{"action-outside-run-tool", 2}, {"action-outside-run-tool", 7}},
-	"testdata/bad/private_tool_attr.bzl":   {{"private-tool-attr", 5}, {"private-tool-attr", 10}},
+	"testdata/bad/actions_run.bzl":            {{"action-outside-run-tool", 2}, {"action-outside-run-tool", 7}},
+	"testdata/bad/private_tool_attr.bzl":      {{"private-tool-attr", 5}, {"private-tool-attr", 10}},
 	"testdata/bad/private_tool_attr_more.bzl": {{"private-tool-attr", 6}, {"private-tool-attr", 7}, {"private-tool-attr", 7}, {"private-tool-attr", 8}},
-	"testdata/bad/shell_env.bzl":           {{"action-outside-run-tool", 2}, {"shell-env", 5}},
-	"testdata/bad/local_tag.BUILD":         {{"forbidden-tag", 7}},
-	"testdata/bad/no_sandbox_tag.BUILD":    {{"forbidden-tag", 5}},
-	"testdata/bad/local_attr.BUILD":        {{"forbidden-tag", 5}},
-	"testdata/bad/concat_tags.BUILD":       {{"forbidden-tag", 7}},
-	"testdata/bad/network_tag.BUILD":       {{"exception-tag", 4}},
-	"testdata/bad/requires_root.BUILD":     {{"exception-tag", 1}},
-	"testdata/bad/macro_network.bzl":       {{"exception-tag", 4}},
-	"testdata/bad/macro_computed_name.bzl": {{"exception-tag", 4}},
-	"testdata/bad/computed_name.BUILD":     {{"exception-tag", 3}},
-	"testdata/bad/exec_req.bzl":            {{"action-outside-run-tool", 2}, {"forbidden-tag", 6}},
-	"testdata/bad/exec_req_dict.bzl":       {{"exception-tag", 1}, {"forbidden-tag", 1}, {"action-outside-run-tool", 4}},
-	"testdata/bad/action_env.bazelrc":      {{"host-env", 1}},
-	"testdata/bad/action_env_home.bazelrc": {{"host-env", 1}},
-	"testdata/bad/two_on_a_line.bazelrc":   {{"host-env", 1}, {"host-env", 1}},
-	"testdata/bad/escaped_tags.BUILD":      {{"forbidden-tag", 3}, {"exception-tag", 8}, {"forbidden-tag", 8}},
-	"testdata/bad/quoted_env.bazelrc":      {{"host-env", 1}, {"host-env", 2}, {"host-env", 3}},
-	"testdata/bad/workflows/ci.yml":        {{"host-env", 4}},
-	"testdata/bad/module/MODULE.bazel":     {{"host-env", 4}},
+	"testdata/bad/shell_env.bzl":              {{"action-outside-run-tool", 2}, {"shell-env", 5}},
+	"testdata/bad/local_tag.BUILD":            {{"forbidden-tag", 7}},
+	"testdata/bad/no_sandbox_tag.BUILD":       {{"forbidden-tag", 5}},
+	"testdata/bad/local_attr.BUILD":           {{"forbidden-tag", 5}},
+	"testdata/bad/concat_tags.BUILD":          {{"forbidden-tag", 7}},
+	"testdata/bad/network_tag.BUILD":          {{"exception-tag", 4}},
+	"testdata/bad/requires_root.BUILD":        {{"exception-tag", 1}},
+	"testdata/bad/macro_network.bzl":          {{"exception-tag", 4}},
+	"testdata/bad/macro_computed_name.bzl":    {{"exception-tag", 4}},
+	"testdata/bad/computed_name.BUILD":        {{"exception-tag", 3}},
+	"testdata/bad/exec_req.bzl":               {{"action-outside-run-tool", 2}, {"forbidden-tag", 6}},
+	"testdata/bad/exec_req_dict.bzl":          {{"exception-tag", 1}, {"forbidden-tag", 1}, {"action-outside-run-tool", 4}},
+	"testdata/bad/action_env.bazelrc":         {{"host-env", 1}},
+	"testdata/bad/action_env_home.bazelrc":    {{"host-env", 1}},
+	"testdata/bad/two_on_a_line.bazelrc":      {{"host-env", 1}, {"host-env", 1}},
+	"testdata/bad/escaped_tags.BUILD":         {{"forbidden-tag", 3}, {"exception-tag", 8}, {"forbidden-tag", 8}},
+	"testdata/bad/quoted_env.bazelrc":         {{"host-env", 1}, {"host-env", 2}, {"host-env", 3}},
+	"testdata/bad/workflows/ci.yml":           {{"host-env", 4}},
+	"testdata/bad/module/MODULE.bazel":        {{"host-env", 4}},
 }
 
 // fixtureRunTool is the run_tool.bzl of the fixtures.
@@ -278,16 +278,16 @@ func TestUnder(t *testing.T) {
 // backslashes.
 func TestStringEscapes(t *testing.T) {
 	for src, want := range map[string]string{
-		`"no-\x73andbox"`:  "no-sandbox",
-		`"lo\143al"`:       "local",
-		`"a\u00e9"`:        "a\u00e9",
-		`"a\nb\tc\\d"`:  "a\nb\tc\\d",
-		`"q\"q"`:           `q"q`,
+		`"no-\x73andbox"`: "no-sandbox",
+		`"lo\143al"`:      "local",
+		`"a\u00e9"`:       "a\u00e9",
+		`"a\nb\tc\\d"`:    "a\nb\tc\\d",
+		`"q\"q"`:          `q"q`,
 		`'x\
 y'`: "xy",
-		`"\q"`:            `\q`,
-		`r"no-\x73"`:      `no-\x73`,
-		`attr"\x41"`:      "A",
+		`"\q"`:       `\q`,
+		`r"no-\x73"`: `no-\x73`,
+		`attr"\x41"`: "A",
 	} {
 		_, strs := tokenize(src)
 		if len(strs) != 1 || strs[0].val != want {

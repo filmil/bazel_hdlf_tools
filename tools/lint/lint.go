@@ -79,15 +79,15 @@ var (
 	// value is refused too: it names a host directory.
 	reHostEnv = regexp.MustCompile(`--(?:host_)?(?:action|test)_env(?:=|\s+)["']?(PATH|HOME)\b`)
 	// These match the masked text, where string contents are blanked.
-	reShellEnv = regexp.MustCompile(`\buse_default_shell_env\s*=\s*True\b`)
-	reLocal    = regexp.MustCompile(`\blocal\s*=\s*(?:True|1)\b`)
-	reTags     = regexp.MustCompile(`\b(?:tags|execution_requirements)\s*=[^=]`)
-	reNameAttr = regexp.MustCompile(`\bname\s*=[^=]`)
-	reActions  = regexp.MustCompile(`\bactions\.run(?:_shell)?\s*\(`)
-	reAttrLbl  = regexp.MustCompile(`\battr\.label(?:_list|_keyed_string_dict)?\s*\(`)
+	reShellEnv  = regexp.MustCompile(`\buse_default_shell_env\s*=\s*True\b`)
+	reLocal     = regexp.MustCompile(`\blocal\s*=\s*(?:True|1)\b`)
+	reTags      = regexp.MustCompile(`\b(?:tags|execution_requirements)\s*=[^=]`)
+	reNameAttr  = regexp.MustCompile(`\bname\s*=[^=]`)
+	reActions   = regexp.MustCompile(`\bactions\.run(?:_shell)?\s*\(`)
+	reAttrLbl   = regexp.MustCompile(`\battr\.label(?:_list|_keyed_string_dict)?\s*\(`)
 	reAttrValue = regexp.MustCompile(`^\s*attr\.\w+\s*\(`)
-	reDefault  = regexp.MustCompile(`\bdefault\s*=[^=]`)
-	reIdent    = regexp.MustCompile(`\b[A-Za-z_]\w*\b`)
+	reDefault   = regexp.MustCompile(`\bdefault\s*=[^=]`)
+	reIdent     = regexp.MustCompile(`\b[A-Za-z_]\w*\b`)
 	// A name assigned at the start of a line (depth 0 is checked apart).
 	reTopAssign = regexp.MustCompile(`(?m)^([A-Za-z_]\w*)\s*=[^=]`)
 )
